@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: movie-ticket-booking
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/moviebooking}
+    username: ${DB_USER:movie}
+    password: ${DB_PASSWORD:movie}
+  jpa:
+    hibernate:
+      ddl-auto: validate          # schema owned by Flyway, not Hibernate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP_UTC   # map Instant -> timestamptz (matches schema)
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+server:
+  port: 8080
+
+# Seat-hold time-to-live (minutes) before an unconfirmed hold auto-expires
+booking:
+  hold:
+    ttl-minutes: 5
+  scheduler:
+    hold-sweep-ms: 30000
