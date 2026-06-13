@@ -1,7 +1,9 @@
 package com.dmg.booking.repository;
 
 import com.dmg.booking.domain.ShowSeat;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -51,4 +53,15 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
               and ss.heldUntil < :cutoff
            """)
     int releaseExpiredHolds(@Param("cutoff") Instant cutoff);
+
+    /**
+     * Pessimistic write-lock the given seats (SELECT ... FOR UPDATE), ordered by id
+     * for a consistent lock order. Concurrent bookings of the same seat serialize
+     * here, which is what prevents double-allocation at booking time.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select ss from ShowSeat ss where ss.id in :ids order by ss.id")
+    List<ShowSeat> lockSeatsForUpdate(@Param("ids") List<Long> ids);
+
+    List<ShowSeat> findByBookingId(Long bookingId);
 }
