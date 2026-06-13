@@ -2,8 +2,8 @@
 -- Both users have password "password" (bcrypt hash below).
 
 INSERT INTO app_user (username, password_hash, role) VALUES
-  ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ADMIN'),
-  ('alice', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'CUSTOMER');
+  ('admin', '$2y$10$acjw/qSx7NOaazhDKz6V/.XrnJQQgMHdsNEpclL.bExoCrJ6I.tnS', 'ADMIN'),
+  ('alice', '$2y$10$acjw/qSx7NOaazhDKz6V/.XrnJQQgMHdsNEpclL.bExoCrJ6I.tnS', 'CUSTOMER');
 
 INSERT INTO city (name) VALUES ('Bengaluru');
 INSERT INTO theater (city_id, name) VALUES (1, 'PVR Forum Mall');
