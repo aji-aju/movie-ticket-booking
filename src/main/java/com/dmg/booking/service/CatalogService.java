@@ -25,7 +25,10 @@ public class CatalogService {
 
     @Transactional(readOnly = true)
     public List<ShowSummaryDto> listShows(String city) {
-        return showRepository.findShows(city).stream()
+        List<Show> shows = (city == null || city.isBlank())
+                ? showRepository.findAllWithDetails()
+                : showRepository.findByCityWithDetails(city);
+        return shows.stream()
                 .map(this::toSummary)
                 .toList();
     }

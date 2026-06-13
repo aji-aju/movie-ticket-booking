@@ -19,8 +19,18 @@ public interface ShowRepository extends JpaRepository<Show, Long> {
              join fetch s.screen sc
              join fetch sc.theater t
              join fetch t.city c
-           where (:city is null or lower(c.name) = lower(:city))
            order by s.startTime
            """)
-    List<Show> findShows(@Param("city") String city);
+    List<Show> findAllWithDetails();
+
+    @Query("""
+           select s from Show s
+             join fetch s.movie
+             join fetch s.screen sc
+             join fetch sc.theater t
+             join fetch t.city c
+           where lower(c.name) = lower(:city)
+           order by s.startTime
+           """)
+    List<Show> findByCityWithDetails(@Param("city") String city);
 }
