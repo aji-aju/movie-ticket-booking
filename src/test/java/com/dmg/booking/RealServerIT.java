@@ -94,6 +94,13 @@ class RealServerIT {
     }
 
     @Test
+    void apiDocs_isPublic() {
+        ResponseEntity<String> r = rest.getForEntity("/v3/api-docs", String.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(r.getBody()).contains("Movie Ticket Booking API");
+    }
+
+    @Test
     void postHolds_unknownShow_is404_notServerError() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

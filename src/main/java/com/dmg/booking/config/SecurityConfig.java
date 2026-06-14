@@ -27,6 +27,7 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // include the bare base path AND subpaths — "/x/**" does not match "/x" with PathPattern
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()  // API docs
                         .requestMatchers(HttpMethod.GET, "/shows", "/shows/**").permitAll()   // public catalog
                         .requestMatchers("/admin", "/admin/**").hasRole("ADMIN")
                         .requestMatchers("/holds", "/holds/**", "/bookings", "/bookings/**").hasRole("CUSTOMER")

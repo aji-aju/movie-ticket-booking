@@ -4,6 +4,8 @@ import com.dmg.booking.config.SecurityUtils;
 import com.dmg.booking.dto.BookingRequest;
 import com.dmg.booking.dto.BookingResponse;
 import com.dmg.booking.service.BookingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/bookings")
+@Tag(name = "Bookings", description = "Confirm and view bookings (CUSTOMER)")
 public class BookingController {
 
     private final BookingService bookingService;
@@ -25,6 +28,9 @@ public class BookingController {
     }
 
     @PostMapping
+    @Operation(summary = "Confirm a booking",
+            description = "Books the seats held by your hold (pessimistic lock + no double-allocation). "
+                    + "Send an Idempotency-Key header to make a retried submit safe.")
     public BookingResponse book(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody BookingRequest request) {
@@ -32,6 +38,7 @@ public class BookingController {
     }
 
     @GetMapping
+    @Operation(summary = "My bookings", description = "The authenticated customer's booking history (newest first).")
     public List<BookingResponse> myBookings() {
         return bookingService.history(SecurityUtils.currentUserId());
     }
