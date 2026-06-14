@@ -17,6 +17,9 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+  mvc:
+    problemdetails:
+      enabled: true          # RFC-7807 error bodies for a consistent error contract
 
 server:
   port: 8080

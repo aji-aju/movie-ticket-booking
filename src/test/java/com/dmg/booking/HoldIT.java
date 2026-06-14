@@ -5,6 +5,7 @@ import com.dmg.booking.domain.ShowSeat;
 import com.dmg.booking.dto.HoldRequest;
 import com.dmg.booking.dto.HoldResponse;
 import com.dmg.booking.exception.ConflictException;
+import com.dmg.booking.exception.NotFoundException;
 import com.dmg.booking.repository.AppUserRepository;
 import com.dmg.booking.repository.ShowSeatRepository;
 import com.dmg.booking.service.HoldService;
@@ -60,6 +61,13 @@ class HoldIT extends AbstractIntegrationTest {
 
         assertThatThrownBy(() -> holdService.createHold(aliceId(), new HoldRequest(1L, List.of(seat))))
                 .isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    void holdWithUnknownShow_isNotFound() {
+        assertThatThrownBy(() ->
+                holdService.createHold(aliceId(), new HoldRequest(999L, List.of(showSeatIds().get(0)))))
+                .isInstanceOf(NotFoundException.class);
     }
 
     @Test

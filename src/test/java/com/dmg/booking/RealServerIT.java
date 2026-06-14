@@ -92,4 +92,14 @@ class RealServerIT {
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(r.getBody()).contains("holdId");
     }
+
+    @Test
+    void postHolds_unknownShow_is404_notServerError() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> body = new HttpEntity<>("{\"showId\":999,\"showSeatIds\":[1]}", headers);
+        ResponseEntity<String> r = rest.withBasicAuth("alice", "password")
+                .exchange("/holds", HttpMethod.POST, body, String.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);   // was 500 (FK violation)
+    }
 }
