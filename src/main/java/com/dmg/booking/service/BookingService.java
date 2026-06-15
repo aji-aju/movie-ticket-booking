@@ -1,6 +1,7 @@
 package com.dmg.booking.service;
 
 import com.dmg.booking.domain.Booking;
+import com.dmg.booking.domain.BookingStatus;
 import com.dmg.booking.domain.HoldStatus;
 import com.dmg.booking.domain.Payment;
 import com.dmg.booking.domain.PaymentStatus;
@@ -10,6 +11,7 @@ import com.dmg.booking.domain.Show;
 import com.dmg.booking.domain.ShowSeat;
 import com.dmg.booking.dto.BookingRequest;
 import com.dmg.booking.dto.BookingResponse;
+import com.dmg.booking.dto.CancelResponse;
 import com.dmg.booking.exception.ConflictException;
 import com.dmg.booking.exception.ForbiddenException;
 import com.dmg.booking.exception.NotFoundException;
@@ -19,6 +21,7 @@ import com.dmg.booking.repository.SeatHoldRepository;
 import com.dmg.booking.repository.ShowRepository;
 import com.dmg.booking.repository.ShowSeatRepository;
 import com.dmg.booking.strategy.PricingStrategy;
+import com.dmg.booking.strategy.RefundStrategy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +40,7 @@ public class BookingService {
     private final PaymentGateway paymentGateway;
     private final PricingStrategy pricingStrategy;
     private final DiscountService discountService;
+    private final RefundStrategy refundStrategy;
 
     public BookingService(ShowSeatRepository showSeatRepository,
                           BookingRepository bookingRepository,
@@ -45,7 +49,8 @@ public class BookingService {
                           ShowRepository showRepository,
                           PaymentGateway paymentGateway,
                           PricingStrategy pricingStrategy,
-                          DiscountService discountService) {
+                          DiscountService discountService,
+                          RefundStrategy refundStrategy) {
         this.showSeatRepository = showSeatRepository;
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
@@ -54,6 +59,7 @@ public class BookingService {
         this.paymentGateway = paymentGateway;
         this.pricingStrategy = pricingStrategy;
         this.discountService = discountService;
+        this.refundStrategy = refundStrategy;
     }
 
     @Transactional
@@ -92,7 +98,7 @@ public class BookingService {
             }
         }
 
-        // 5. Price (tier + weekend via PricingStrategy) then apply any discount code.
+        // 5. Price (tier + weekend) then apply any discount code.
         Show show = showRepository.findById(hold.getShowId())
                 .orElseThrow(() -> new NotFoundException("Show " + hold.getShowId() + " not found"));
         BigDecimal subtotal = seats.stream()
@@ -117,6 +123,36 @@ public class BookingService {
 
         return new BookingResponse(booking.getId(), booking.getStatus().name(),
                 total, request.showSeatIds(), booking.getCreatedAt());
+    }
+
+    /**
+     * Cancel a booking the caller owns: release its seats back to the pool, compute a
+     * refund per the time-based {@link RefundStrategy}, and record the refund.
+     */
+    @Transactional
+    public CancelResponse cancel(Long userId, Long bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NotFoundException("Booking " + bookingId + " not found"));
+        if (!booking.getUserId().equals(userId)) {
+            throw new ForbiddenException("Booking " + bookingId + " does not belong to the current user");
+        }
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new ConflictException("Booking " + bookingId + " is already cancelled");
+        }
+
+        Show show = showRepository.findById(booking.getShowId())
+                .orElseThrow(() -> new NotFoundException("Show " + booking.getShowId() + " not found"));
+        BigDecimal refund = refundStrategy.refundAmount(booking.getTotalAmount(), show.getStartTime(), Instant.now());
+
+        showSeatRepository.releaseSeatsForBooking(bookingId);
+        booking.setStatus(BookingStatus.CANCELLED);
+
+        if (refund.signum() > 0) {
+            String ref = paymentGateway.refund(bookingId, refund);
+            paymentRepository.save(new Payment(bookingId, refund, PaymentStatus.REFUNDED, ref));
+        }
+
+        return new CancelResponse(bookingId, booking.getStatus().name(), refund);
     }
 
     @Transactional(readOnly = true)

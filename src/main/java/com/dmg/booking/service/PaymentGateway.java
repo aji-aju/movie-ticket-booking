@@ -7,4 +7,7 @@ public interface PaymentGateway {
 
     /** Charge the amount and return a provider reference. Throws if the charge fails. */
     String charge(Long bookingId, BigDecimal amount);
+
+    /** Refund the amount and return a provider reference. */
+    String refund(Long bookingId, BigDecimal amount);
 }

@@ -13,4 +13,9 @@ public class MockPaymentGateway implements PaymentGateway {
     public String charge(Long bookingId, BigDecimal amount) {
         return "MOCK-" + UUID.randomUUID();
     }
+
+    @Override
+    public String refund(Long bookingId, BigDecimal amount) {
+        return "REFUND-" + UUID.randomUUID();
+    }
 }

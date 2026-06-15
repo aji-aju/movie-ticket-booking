@@ -64,4 +64,20 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
     List<ShowSeat> lockSeatsForUpdate(@Param("ids") List<Long> ids);
 
     List<ShowSeat> findByBookingId(Long bookingId);
+
+    /**
+     * Release all seats belonging to a booking back to AVAILABLE (used on cancellation).
+     * No clearAutomatically: the cancel flow keeps the managed Booking entity so its
+     * status update still flushes, and it does not re-read these seats in the same tx.
+     */
+    @Modifying
+    @Query("""
+           update ShowSeat ss
+              set ss.status = com.dmg.booking.domain.SeatStatus.AVAILABLE,
+                  ss.bookingId = null,
+                  ss.holdId = null,
+                  ss.heldUntil = null
+            where ss.bookingId = :bookingId
+           """)
+    int releaseSeatsForBooking(@Param("bookingId") Long bookingId);
 }
