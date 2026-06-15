@@ -30,6 +30,9 @@ public class Booking {
     @Column(name = "idempotency_key", unique = true)
     private String idempotencyKey;
 
+    @Column(name = "discount_code")
+    private String discountCode;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -37,12 +40,13 @@ public class Booking {
     protected Booking() {
     }
 
-    public Booking(Long userId, Long showId, BigDecimal totalAmount, String idempotencyKey) {
+    public Booking(Long userId, Long showId, BigDecimal totalAmount, String idempotencyKey, String discountCode) {
         this.userId = userId;
         this.showId = showId;
         this.status = BookingStatus.CONFIRMED;
         this.totalAmount = totalAmount;
         this.idempotencyKey = idempotencyKey;
+        this.discountCode = discountCode;
     }
 
     public Long getId() {
@@ -67,6 +71,10 @@ public class Booking {
 
     public String getIdempotencyKey() {
         return idempotencyKey;
+    }
+
+    public String getDiscountCode() {
+        return discountCode;
     }
 
     public Instant getCreatedAt() {

@@ -7,6 +7,7 @@ import com.dmg.booking.dto.ShowSummaryDto;
 import com.dmg.booking.exception.NotFoundException;
 import com.dmg.booking.repository.ShowRepository;
 import com.dmg.booking.repository.ShowSeatRepository;
+import com.dmg.booking.strategy.PricingStrategy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,10 +18,14 @@ public class CatalogService {
 
     private final ShowRepository showRepository;
     private final ShowSeatRepository showSeatRepository;
+    private final PricingStrategy pricingStrategy;
 
-    public CatalogService(ShowRepository showRepository, ShowSeatRepository showSeatRepository) {
+    public CatalogService(ShowRepository showRepository,
+                          ShowSeatRepository showSeatRepository,
+                          PricingStrategy pricingStrategy) {
         this.showRepository = showRepository;
         this.showSeatRepository = showSeatRepository;
+        this.pricingStrategy = pricingStrategy;
     }
 
     @Transactional(readOnly = true)
@@ -28,18 +33,15 @@ public class CatalogService {
         List<Show> shows = (city == null || city.isBlank())
                 ? showRepository.findAllWithDetails()
                 : showRepository.findByCityWithDetails(city);
-        return shows.stream()
-                .map(this::toSummary)
-                .toList();
+        return shows.stream().map(this::toSummary).toList();
     }
 
     @Transactional(readOnly = true)
     public List<ShowSeatDto> getShowSeats(Long showId) {
-        if (!showRepository.existsById(showId)) {
-            throw new NotFoundException("Show " + showId + " not found");
-        }
+        Show show = showRepository.findById(showId)
+                .orElseThrow(() -> new NotFoundException("Show " + showId + " not found"));
         return showSeatRepository.findByShowIdWithSeat(showId).stream()
-                .map(this::toSeatDto)
+                .map(ss -> toSeatDto(ss, show))
                 .toList();
     }
 
@@ -54,13 +56,13 @@ public class CatalogService {
                 s.getBasePrice());
     }
 
-    private ShowSeatDto toSeatDto(ShowSeat ss) {
+    private ShowSeatDto toSeatDto(ShowSeat ss, Show show) {
         return new ShowSeatDto(
                 ss.getId(),
                 ss.getSeat().getRowLabel(),
                 ss.getSeat().getSeatNumber(),
                 ss.getSeat().getTier().name(),
                 ss.getStatus().name(),
-                ss.getPrice());
+                pricingStrategy.priceFor(ss, show));   // effective price (tier + weekend)
     }
 }

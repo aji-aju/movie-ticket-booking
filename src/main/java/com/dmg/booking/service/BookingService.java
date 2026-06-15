@@ -6,6 +6,7 @@ import com.dmg.booking.domain.Payment;
 import com.dmg.booking.domain.PaymentStatus;
 import com.dmg.booking.domain.SeatHold;
 import com.dmg.booking.domain.SeatStatus;
+import com.dmg.booking.domain.Show;
 import com.dmg.booking.domain.ShowSeat;
 import com.dmg.booking.dto.BookingRequest;
 import com.dmg.booking.dto.BookingResponse;
@@ -15,7 +16,9 @@ import com.dmg.booking.exception.NotFoundException;
 import com.dmg.booking.repository.BookingRepository;
 import com.dmg.booking.repository.PaymentRepository;
 import com.dmg.booking.repository.SeatHoldRepository;
+import com.dmg.booking.repository.ShowRepository;
 import com.dmg.booking.repository.ShowSeatRepository;
+import com.dmg.booking.strategy.PricingStrategy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,30 +33,32 @@ public class BookingService {
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
     private final SeatHoldRepository seatHoldRepository;
+    private final ShowRepository showRepository;
     private final PaymentGateway paymentGateway;
+    private final PricingStrategy pricingStrategy;
+    private final DiscountService discountService;
 
     public BookingService(ShowSeatRepository showSeatRepository,
                           BookingRepository bookingRepository,
                           PaymentRepository paymentRepository,
                           SeatHoldRepository seatHoldRepository,
-                          PaymentGateway paymentGateway) {
+                          ShowRepository showRepository,
+                          PaymentGateway paymentGateway,
+                          PricingStrategy pricingStrategy,
+                          DiscountService discountService) {
         this.showSeatRepository = showSeatRepository;
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
         this.seatHoldRepository = seatHoldRepository;
+        this.showRepository = showRepository;
         this.paymentGateway = paymentGateway;
+        this.pricingStrategy = pricingStrategy;
+        this.discountService = discountService;
     }
 
-    /**
-     * Confirm a booking for seats held by the caller's own hold. Correctness under
-     * concurrency comes from pessimistically locking the seat rows (SELECT ... FOR UPDATE).
-     * Security: the hold must belong to the authenticated user (no booking against someone
-     * else's hold), and idempotency replay is scoped per-user. A concurrent same-key insert
-     * hits the unique constraint and is mapped to 409 by the global handler.
-     */
     @Transactional
     public BookingResponse book(Long userId, String idempotencyKey, BookingRequest request) {
-        // 1. Idempotent replay — scoped to the caller so a key can't read another user's booking.
+        // 1. Idempotent replay — scoped to the caller.
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             var existing = bookingRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
             if (existing.isPresent()) {
@@ -61,7 +66,7 @@ public class BookingService {
             }
         }
 
-        // 2. The hold must exist and belong to the caller (prevents IDOR: booking another user's hold).
+        // 2. The hold must exist and belong to the caller (no IDOR).
         SeatHold hold = seatHoldRepository.findById(request.holdId())
                 .orElseThrow(() -> new NotFoundException("Hold " + request.holdId() + " not found"));
         if (!hold.getUserId().equals(userId)) {
@@ -87,12 +92,16 @@ public class BookingService {
             }
         }
 
-        // 5. Create the booking (showId comes from the verified hold).
-        BigDecimal total = seats.stream()
-                .map(ShowSeat::getPrice)
+        // 5. Price (tier + weekend via PricingStrategy) then apply any discount code.
+        Show show = showRepository.findById(hold.getShowId())
+                .orElseThrow(() -> new NotFoundException("Show " + hold.getShowId() + " not found"));
+        BigDecimal subtotal = seats.stream()
+                .map(seat -> pricingStrategy.priceFor(seat, show))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal total = discountService.applyDiscount(subtotal, request.discountCode());
+
         Booking booking = bookingRepository.save(
-                new Booking(userId, hold.getShowId(), total, idempotencyKey));
+                new Booking(userId, hold.getShowId(), total, idempotencyKey, request.discountCode()));
 
         // 6. Flip the locked seats to BOOKED.
         for (ShowSeat seat : seats) {
