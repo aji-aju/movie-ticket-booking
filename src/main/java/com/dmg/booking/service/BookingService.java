@@ -20,8 +20,10 @@ import com.dmg.booking.repository.PaymentRepository;
 import com.dmg.booking.repository.SeatHoldRepository;
 import com.dmg.booking.repository.ShowRepository;
 import com.dmg.booking.repository.ShowSeatRepository;
+import com.dmg.booking.event.BookingConfirmedEvent;
 import com.dmg.booking.strategy.PricingStrategy;
 import com.dmg.booking.strategy.RefundStrategy;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +43,7 @@ public class BookingService {
     private final PricingStrategy pricingStrategy;
     private final DiscountService discountService;
     private final RefundStrategy refundStrategy;
+    private final ApplicationEventPublisher eventPublisher;
 
     public BookingService(ShowSeatRepository showSeatRepository,
                           BookingRepository bookingRepository,
@@ -50,7 +53,8 @@ public class BookingService {
                           PaymentGateway paymentGateway,
                           PricingStrategy pricingStrategy,
                           DiscountService discountService,
-                          RefundStrategy refundStrategy) {
+                          RefundStrategy refundStrategy,
+                          ApplicationEventPublisher eventPublisher) {
         this.showSeatRepository = showSeatRepository;
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
@@ -60,6 +64,7 @@ public class BookingService {
         this.pricingStrategy = pricingStrategy;
         this.discountService = discountService;
         this.refundStrategy = refundStrategy;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -120,6 +125,9 @@ public class BookingService {
         String ref = paymentGateway.charge(booking.getId(), total);
         paymentRepository.save(new Payment(booking.getId(), total, PaymentStatus.SUCCESS, ref));
         hold.setStatus(HoldStatus.CONVERTED);
+
+        // Confirmation is dispatched asynchronously after this tx commits (non-blocking).
+        eventPublisher.publishEvent(new BookingConfirmedEvent(booking.getId(), userId, total));
 
         return new BookingResponse(booking.getId(), booking.getStatus().name(),
                 total, request.showSeatIds(), booking.getCreatedAt());

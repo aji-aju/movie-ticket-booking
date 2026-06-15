@@ -39,6 +39,7 @@ public abstract class AbstractIntegrationTest {
     void resetMutableState() {
         // Return all seats to AVAILABLE and clear holds/bookings; keep the seeded catalog.
         jdbc.execute("UPDATE show_seat SET status='AVAILABLE', hold_id=NULL, held_until=NULL, booking_id=NULL");
+        jdbc.execute("DELETE FROM notification");
         jdbc.execute("DELETE FROM payment");
         jdbc.execute("DELETE FROM seat_hold");
         jdbc.execute("DELETE FROM booking");
