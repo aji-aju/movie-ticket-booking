@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,10 +16,12 @@ class ShowControllerIT extends AbstractIntegrationTest {
 
     @Test
     void browseShows_isPublic_andReturnsSeededShow() throws Exception {
+        // Position-independent: enriched seed (V8) adds shows that may sort ahead of the
+        // seeded Bengaluru/Inception show by start_time; it must still be present.
         mvc.perform(get("/shows"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].movieTitle").value("Inception"))
-                .andExpect(jsonPath("$[0].city").value("Bengaluru"));
+                .andExpect(jsonPath("$[*].movieTitle", hasItem("Inception")))
+                .andExpect(jsonPath("$[*].city", hasItem("Bengaluru")));
     }
 
     @Test

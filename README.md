@@ -69,16 +69,27 @@ open http://localhost:8080/swagger-ui.html
 
 ### Seed data & credentials (dev only)
 
-Seeded by Flyway (`V2`/`V4`). Passwords are all `password` (HTTP Basic).
+Seeded by Flyway (`V2`/`V4` core, `V8` enrichment). Passwords are all `password` (HTTP Basic).
 
-| User    | Role     | Use for |
-|---------|----------|---------|
-| `admin` | ADMIN    | admin-only routes |
-| `alice` | CUSTOMER | hold / book / cancel |
-| `bob`   | CUSTOMER | second customer (IDOR / concurrency tests) |
+| User            | Role     | Use for |
+|-----------------|----------|---------|
+| `admin`         | ADMIN    | admin-only routes |
+| `alice`         | CUSTOMER | hold / book / cancel |
+| `bob`           | CUSTOMER | second customer (IDOR / concurrency tests) |
+| `carol`, `dave` | CUSTOMER | extra customers for demos |
 
-Catalog: **Bengaluru → PVR → Screen 1 → "Inception"**, show id `1`, seats `A1–A5` (REGULAR ₹200) and
-`B1–B5` (PREMIUM ₹300). Discount codes: `SAVE10` (10% off), `FLAT50` (₹50 off), `EXPIRED` (inactive).
+**Catalog:** 4 cities (Bengaluru, Mumbai, Delhi, Hyderabad), 5 movies, 8 shows. The original
+**Bengaluru → PVR → Screen 1 → "Inception"** (show id `1`, seats `A1–A5` REGULAR ₹200 / `B1–B5`
+PREMIUM ₹300) is preserved exactly for the tests; the rest is added for a realistic browse. Per-show
+seat price is `base_price` (REGULAR) / `base_price + 100` (PREMIUM); the weekend ×1.25 surcharge is
+applied at booking time.
+
+The enriched shows are chosen to demo the pricing/refund logic:
+- a **weekend** IMAX show (UTC-Saturday) → a premium seat books at ₹400 × 1.25 = **₹500**;
+- shows at **+25h / +12h / +45m** from now → the **full / half / none** refund tiers (cancel right after booking).
+
+**Discount codes:** `SAVE10` (10%), `FLAT50` (₹50), `WELCOME25` (25%), `FLAT100` (₹100),
+`STUDENT15` (15%); `EXPIRED` is inactive (the 404 path).
 
 > The seeded show time is `now() + 1 day` **at first migration**. If your dev DB has been running for a
 > while, re-seed with `docker-compose down -v && docker-compose up -d` so the show is in the future
@@ -150,7 +161,7 @@ new class, no edits to the booking flow.
 ./gradlew test     # spins up Postgres via Testcontainers automatically
 ```
 
-**42 tests** across unit (Strategy impls) and Testcontainers integration (real Postgres + full servlet
+**43 tests** across unit (Strategy impls) and Testcontainers integration (real Postgres + full servlet
 stack). Highlights:
 
 - **The concurrency proof** (`BookingConcurrencyIT`): N threads book the *same* seat → asserts **exactly
