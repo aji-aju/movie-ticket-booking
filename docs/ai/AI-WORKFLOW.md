@@ -39,7 +39,7 @@ was reviewed. (AI use was expected for this take-home; this documents it honestl
 
 - Scope and cuts (kept deliberately narrow).
 - Anything touching credentials/secrets — GitHub auth was done via interactive `gh auth login`, never a
-  token in chat; the repo is private.
+  token in chat; the repo was private during development and is public for submission.
 
 ## Artifacts in this folder
 
