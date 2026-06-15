@@ -26,7 +26,7 @@ browse → HOLD (fast, optimistic) → BOOK (authoritative, locked) → pay → 
 | **Hold** | Atomic conditional `UPDATE … WHERE status='AVAILABLE'` (compare-and-set), check `rowsAffected == n` | Lock-free and fast — holds are frequent, contention is rare, and an abandoned hold is cheap to reclaim. |
 | **Book** | `SELECT … FOR UPDATE` on the held `show_seat` rows inside one `@Transactional`, re-verify still `HELD` by *this* hold and not expired, then flip to `BOOKED` | Booking is the authoritative money step; a pessimistic row lock makes the check-then-act atomic against concurrent bookers. |
 | **Expiry** | `@Scheduled` sweeper releases `HELD` seats whose `held_until < now()` back to `AVAILABLE` | Abandoned holds self-heal; seats never get stuck. |
-| **Retry safety** | `Idempotency-Key` (globally-unique `idempotency_key` on `booking`) | A retried submit replays the original booking instead of creating a second one. |
+| **Retry safety** | `Idempotency-Key` (per-user unique `(user_id, idempotency_key)` on `booking`) | A retried submit replays the original booking instead of creating a second one. |
 
 **Alternatives considered**
 
@@ -161,12 +161,14 @@ new class, no edits to the booking flow.
 ./gradlew test     # spins up Postgres via Testcontainers automatically
 ```
 
-**42 tests** across unit (Strategy impls) and Testcontainers integration (real Postgres + full servlet
+**44 tests** across unit (Strategy impls) and Testcontainers integration (real Postgres + full servlet
 stack). Highlights:
 
-- **The concurrency proof** (`BookingConcurrencyIT`): N threads book the *same* seat → asserts **exactly
-  one** success, the rest rejected, and the seat is `BOOKED` once. This is the test that justifies the
-  pessimistic lock.
+- **The concurrency proofs** (`BookingConcurrencyIT`): N threads book the *same* seat → asserts **exactly
+  one** success, the rest rejected, and the seat is `BOOKED` once (justifies the pessimistic lock); a
+  companion test races N concurrent **holds** of one seat → exactly one wins (proves the lock-free CAS).
+- **Concurrent double-cancel** (`CancelIT`): two threads cancel one booking → exactly one refund row,
+  proving the pessimistic row lock on cancel.
 - **`RealServerIT`** — real HTTP on a random port + Spring Security; catches live-only behavior MockMvc
   misses (PathPattern base-path matching, JDBC null-param typing).
 - IDOR (cross-user hold/booking → 403), per-user idempotency, hold expiry, cancel + refund, validation.
@@ -189,8 +191,6 @@ notifications, and the test suite incl. the concurrency proof.
 - **Real payment gateway** — `PaymentGateway` is a mock abstraction. Note: the mock charge runs *inside*
   the booking transaction; a real network call would be moved out (outbox/saga) so it doesn't hold the
   DB connection.
-- **Idempotency keys are globally unique** (not per-user namespaced) — a simplification; two users can't
-  reuse the same literal key string. Tested and documented as intended.
 - Out of scope by design: microservices, Kafka, OAuth/SSO, a UI, deploy/CI-CD.
 
 ---

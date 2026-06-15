@@ -7,7 +7,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "booking")
+@Table(name = "booking",
+        uniqueConstraints = @UniqueConstraint(name = "uq_booking_user_idem",
+                columnNames = {"user_id", "idempotency_key"}))
 public class Booking {
 
     @Id
@@ -27,7 +29,7 @@ public class Booking {
     @Column(name = "total_amount", nullable = false)
     private BigDecimal totalAmount;
 
-    @Column(name = "idempotency_key", unique = true)
+    @Column(name = "idempotency_key")
     private String idempotencyKey;
 
     @Column(name = "discount_code")

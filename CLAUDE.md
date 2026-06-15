@@ -38,7 +38,7 @@ If a stale app holds port 8080: `lsof -nP -tiTCP:8080 -sTCP:LISTEN | xargs -r ki
   - **Hold** = atomic `UPDATE … WHERE status='AVAILABLE'` + check affected rows (CAS). Lock-free.
   - **Book** = `@Lock(PESSIMISTIC_WRITE)` `SELECT … FOR UPDATE`, re-verify HELD-by-this-hold + not
     expired, then flip to BOOKED — all in one `@Transactional`.
-  - Idempotency via the globally-unique `booking.idempotency_key`.
+  - Idempotency via a composite-unique `(user_id, idempotency_key)` on `booking` (keys scoped per user).
 - **Bulk `@Modifying` + `clearAutomatically=true` detaches managed entities.** This already caused a
   cancel bug (the `Booking` status update was lost). If a method runs a bulk update *and* mutates a
   managed entity afterward, don't clear the context — or re-load / save explicitly.

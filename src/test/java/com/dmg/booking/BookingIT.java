@@ -15,7 +15,6 @@ import com.dmg.booking.service.BookingService;
 import com.dmg.booking.service.HoldService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -110,15 +109,19 @@ class BookingIT extends AbstractIntegrationTest {
         Long bob = bobId();
         Long seatA = showSeatIds().get(5);
         HoldResponse aliceHold = holdService.createHold(alice, new HoldRequest(1L, List.of(seatA)));
-        bookingService.book(alice, "shared-key", new BookingRequest(aliceHold.holdId(), List.of(seatA)));
+        BookingResponse aliceBooking =
+                bookingService.book(alice, "shared-key", new BookingRequest(aliceHold.holdId(), List.of(seatA)));
 
         Long seatB = showSeatIds().get(6);
         HoldResponse bobHold = holdService.createHold(bob, new HoldRequest(1L, List.of(seatB)));
 
-        // Bob reuses Alice's key: he must NOT receive Alice's booking; the global-unique key collides.
-        assertThatThrownBy(() ->
-                bookingService.book(bob, "shared-key", new BookingRequest(bobHold.holdId(), List.of(seatB))))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        // Keys are scoped per user (composite UNIQUE(user_id, idempotency_key)): Bob reusing
+        // Alice's key gets his OWN booking, never Alice's, and there is no collision.
+        BookingResponse bobBooking =
+                bookingService.book(bob, "shared-key", new BookingRequest(bobHold.holdId(), List.of(seatB)));
+
+        assertThat(bobBooking.bookingId()).isNotEqualTo(aliceBooking.bookingId());
+        assertThat(bookingRepository.count()).isEqualTo(2);
     }
 
     @Test

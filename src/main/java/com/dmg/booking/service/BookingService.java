@@ -139,7 +139,7 @@ public class BookingService {
      */
     @Transactional
     public CancelResponse cancel(Long userId, Long bookingId) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new NotFoundException("Booking " + bookingId + " not found"));
         if (!booking.getUserId().equals(userId)) {
             throw new ForbiddenException("Booking " + bookingId + " does not belong to the current user");

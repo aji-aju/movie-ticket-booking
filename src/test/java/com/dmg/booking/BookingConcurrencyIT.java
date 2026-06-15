@@ -85,4 +85,50 @@ class BookingConcurrencyIT extends AbstractIntegrationTest {
                 .isEqualTo(SeatStatus.BOOKED);
         assertThat(bookingRepository.count()).isEqualTo(1);
     }
+
+    /**
+     * The other allocation guard: the lock-free hold CAS. Many users race to HOLD the same
+     * AVAILABLE seat at once; exactly one conditional UPDATE flips it, the rest see 0 rows
+     * affected and are rejected. Proves no two holds can claim the same seat.
+     */
+    @Test
+    void concurrentHoldsOfSameSeat_exactlyOneSucceeds() throws Exception {
+        Long alice = appUserRepository.findByUsername("alice").orElseThrow().getId();
+        Long seatId = showSeatRepository.findByShowIdWithSeat(1L).get(0).getId();
+
+        int threads = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch go = new CountDownLatch(1);
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger failure = new AtomicInteger();
+        List<Future<?>> futures = new ArrayList<>();
+
+        for (int i = 0; i < threads; i++) {
+            futures.add(pool.submit(() -> {
+                ready.countDown();
+                go.await();
+                try {
+                    holdService.createHold(alice, new HoldRequest(1L, List.of(seatId)));
+                    success.incrementAndGet();
+                } catch (Exception e) {
+                    failure.incrementAndGet();               // ConflictException for the CAS losers
+                }
+                return null;
+            }));
+        }
+
+        ready.await();
+        go.countDown();
+        for (Future<?> f : futures) {
+            f.get();
+        }
+        pool.shutdown();
+        pool.awaitTermination(30, TimeUnit.SECONDS);
+
+        assertThat(success.get()).isEqualTo(1);
+        assertThat(failure.get()).isEqualTo(threads - 1);
+        assertThat(showSeatRepository.findById(seatId).orElseThrow().getStatus())
+                .isEqualTo(SeatStatus.HELD);
+    }
 }
