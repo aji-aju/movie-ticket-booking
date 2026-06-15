@@ -7,6 +7,8 @@ holds**. PostgreSQL-backed, fully tested with Testcontainers (including a concur
 > DMG SDE-2 take-home. The focus is a clean, finished, well-tested core rather than maximum breadth —
 > see [Scope & deliberate cuts](#scope--deliberate-cuts).
 
+**🎥 Walkthrough video (~5 min):** https://www.loom.com/share/2c035433a1354f458a5c33ea0a516ca5
+
 ---
 
 ## The core challenge: no double-booking
