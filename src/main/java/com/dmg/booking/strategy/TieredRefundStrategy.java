@@ -3,6 +3,7 @@ package com.dmg.booking.strategy;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -21,11 +22,11 @@ public class TieredRefundStrategy implements RefundStrategy {
     public BigDecimal refundAmount(BigDecimal amountPaid, Instant showStart, Instant cancelledAt) {
         long hoursBefore = Duration.between(cancelledAt, showStart).toHours();
         if (hoursBefore >= 24) {
-            return amountPaid;
+            return amountPaid.setScale(2, RoundingMode.HALF_UP);
         }
         if (hoursBefore >= 2) {
-            return amountPaid.multiply(HALF);
+            return amountPaid.multiply(HALF).setScale(2, RoundingMode.HALF_UP);
         }
-        return BigDecimal.ZERO;
+        return BigDecimal.ZERO.setScale(2);
     }
 }

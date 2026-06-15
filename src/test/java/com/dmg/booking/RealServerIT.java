@@ -41,6 +41,7 @@ class RealServerIT {
     @BeforeEach
     void reset() {
         jdbc.execute("UPDATE show_seat SET status='AVAILABLE', hold_id=NULL, held_until=NULL, booking_id=NULL");
+        jdbc.execute("DELETE FROM notification");
         jdbc.execute("DELETE FROM payment");
         jdbc.execute("DELETE FROM seat_hold");
         jdbc.execute("DELETE FROM booking");
@@ -89,7 +90,7 @@ class RealServerIT {
     void postHolds_asCustomer_succeeds() {
         ResponseEntity<String> r = rest.withBasicAuth("alice", "password")
                 .exchange("/holds", HttpMethod.POST, holdBody(), String.class);
-        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(r.getBody()).contains("holdId");
     }
 
@@ -115,7 +116,7 @@ class RealServerIT {
         // Alice holds seat 1
         ResponseEntity<String> holdResp = rest.withBasicAuth("alice", "password")
                 .exchange("/holds", HttpMethod.POST, holdBody(), String.class);
-        assertThat(holdResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(holdResp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         long holdId = extractHoldId(holdResp.getBody());
 
         // Bob tries to book Alice's hold -> must be 403 (not 200, not 500)

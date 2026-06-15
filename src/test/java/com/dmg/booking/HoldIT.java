@@ -93,6 +93,13 @@ class HoldIT extends AbstractIntegrationTest {
 
         mvc.perform(post("/holds").with(httpBasic("alice", "password"))
                         .contentType("application/json").content(body))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void holdWithEmptySeatList_isBadRequest() throws Exception {
+        mvc.perform(post("/holds").with(httpBasic("alice", "password"))
+                        .contentType("application/json").content("{\"showId\":1,\"showSeatIds\":[]}"))
+                .andExpect(status().isBadRequest());
     }
 }
