@@ -109,4 +109,29 @@ class RealServerIT {
                 .exchange("/holds", HttpMethod.POST, body, String.class);
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);   // was 500 (FK violation)
     }
+
+    @Test
+    void cannotBookAnotherUsersHold_idor() {
+        // Alice holds seat 1
+        ResponseEntity<String> holdResp = rest.withBasicAuth("alice", "password")
+                .exchange("/holds", HttpMethod.POST, holdBody(), String.class);
+        assertThat(holdResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        long holdId = extractHoldId(holdResp.getBody());
+
+        // Bob tries to book Alice's hold -> must be 403 (not 200, not 500)
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> bookBody = new HttpEntity<>("{\"holdId\":" + holdId + ",\"showSeatIds\":[1]}", headers);
+        ResponseEntity<String> r = rest.withBasicAuth("bob", "password")
+                .exchange("/bookings", HttpMethod.POST, bookBody, String.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    private static long extractHoldId(String json) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"holdId\":(\\d+)").matcher(json);
+        if (!m.find()) {
+            throw new IllegalStateException("no holdId in: " + json);
+        }
+        return Long.parseLong(m.group(1));
+    }
 }

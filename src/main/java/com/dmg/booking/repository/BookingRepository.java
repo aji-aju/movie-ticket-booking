@@ -8,7 +8,8 @@ import java.util.Optional;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
-    Optional<Booking> findByIdempotencyKey(String idempotencyKey);
+    /** Idempotency lookup is scoped to the user so one client cannot read another's booking. */
+    Optional<Booking> findByUserIdAndIdempotencyKey(Long userId, String idempotencyKey);
 
     List<Booking> findByUserIdOrderByCreatedAtDesc(Long userId);
 }

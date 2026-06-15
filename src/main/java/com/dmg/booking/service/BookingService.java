@@ -4,11 +4,13 @@ import com.dmg.booking.domain.Booking;
 import com.dmg.booking.domain.HoldStatus;
 import com.dmg.booking.domain.Payment;
 import com.dmg.booking.domain.PaymentStatus;
+import com.dmg.booking.domain.SeatHold;
 import com.dmg.booking.domain.SeatStatus;
 import com.dmg.booking.domain.ShowSeat;
 import com.dmg.booking.dto.BookingRequest;
 import com.dmg.booking.dto.BookingResponse;
 import com.dmg.booking.exception.ConflictException;
+import com.dmg.booking.exception.ForbiddenException;
 import com.dmg.booking.exception.NotFoundException;
 import com.dmg.booking.repository.BookingRepository;
 import com.dmg.booking.repository.PaymentRepository;
@@ -43,29 +45,36 @@ public class BookingService {
     }
 
     /**
-     * Confirm a booking for seats currently held by the caller's hold. Correctness
-     * under concurrency comes from pessimistically locking the seat rows
-     * (SELECT ... FOR UPDATE): concurrent attempts on the same seat serialize here,
-     * so exactly one wins and the rest see a non-HELD seat and get a 409.
-     * An idempotency key makes a retried submit return the original booking.
+     * Confirm a booking for seats held by the caller's own hold. Correctness under
+     * concurrency comes from pessimistically locking the seat rows (SELECT ... FOR UPDATE).
+     * Security: the hold must belong to the authenticated user (no booking against someone
+     * else's hold), and idempotency replay is scoped per-user. A concurrent same-key insert
+     * hits the unique constraint and is mapped to 409 by the global handler.
      */
     @Transactional
     public BookingResponse book(Long userId, String idempotencyKey, BookingRequest request) {
-        // 1. Idempotent replay: a retried submit returns the original booking.
+        // 1. Idempotent replay — scoped to the caller so a key can't read another user's booking.
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            var existing = bookingRepository.findByIdempotencyKey(idempotencyKey);
+            var existing = bookingRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
             if (existing.isPresent()) {
                 return toResponse(existing.get());
             }
         }
 
-        // 2. Lock the seat rows (FOR UPDATE) — the serialization point.
+        // 2. The hold must exist and belong to the caller (prevents IDOR: booking another user's hold).
+        SeatHold hold = seatHoldRepository.findById(request.holdId())
+                .orElseThrow(() -> new NotFoundException("Hold " + request.holdId() + " not found"));
+        if (!hold.getUserId().equals(userId)) {
+            throw new ForbiddenException("Hold " + request.holdId() + " does not belong to the current user");
+        }
+
+        // 3. Lock the seat rows (FOR UPDATE) — the serialization point.
         List<ShowSeat> seats = showSeatRepository.lockSeatsForUpdate(request.showSeatIds());
         if (seats.size() != request.showSeatIds().size()) {
             throw new NotFoundException("One or more seats do not exist");
         }
 
-        // 3. Every seat must still be HELD by THIS hold and not expired.
+        // 4. Every seat must still be HELD by THIS hold and not expired.
         Instant now = Instant.now();
         for (ShowSeat seat : seats) {
             boolean heldByThisHold = seat.getStatus() == SeatStatus.HELD
@@ -78,27 +87,24 @@ public class BookingService {
             }
         }
 
-        // 4. Create the booking (total = sum of seat prices; pricing strategies layer in M6).
+        // 5. Create the booking (showId comes from the verified hold).
         BigDecimal total = seats.stream()
                 .map(ShowSeat::getPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        Long showId = seats.get(0).getShow().getId();
-        Booking booking = bookingRepository.save(new Booking(userId, showId, total, idempotencyKey));
+        Booking booking = bookingRepository.save(
+                new Booking(userId, hold.getShowId(), total, idempotencyKey));
 
-        // 5. Flip the locked seats to BOOKED.
+        // 6. Flip the locked seats to BOOKED.
         for (ShowSeat seat : seats) {
             seat.setStatus(SeatStatus.BOOKED);
             seat.setBookingId(booking.getId());
             seat.setHeldUntil(null);
         }
 
-        // 6. Take payment (mock) and record it.
+        // 7. Take payment (mock) and convert the hold.
         String ref = paymentGateway.charge(booking.getId(), total);
         paymentRepository.save(new Payment(booking.getId(), total, PaymentStatus.SUCCESS, ref));
-
-        // 7. Convert the hold.
-        seatHoldRepository.findById(request.holdId())
-                .ifPresent(h -> h.setStatus(HoldStatus.CONVERTED));
+        hold.setStatus(HoldStatus.CONVERTED);
 
         return new BookingResponse(booking.getId(), booking.getStatus().name(),
                 total, request.showSeatIds(), booking.getCreatedAt());

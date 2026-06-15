@@ -7,6 +7,7 @@ import com.dmg.booking.dto.BookingResponse;
 import com.dmg.booking.dto.HoldRequest;
 import com.dmg.booking.dto.HoldResponse;
 import com.dmg.booking.exception.ConflictException;
+import com.dmg.booking.exception.ForbiddenException;
 import com.dmg.booking.repository.AppUserRepository;
 import com.dmg.booking.repository.BookingRepository;
 import com.dmg.booking.repository.ShowSeatRepository;
@@ -14,6 +15,7 @@ import com.dmg.booking.service.BookingService;
 import com.dmg.booking.service.HoldService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -40,6 +42,10 @@ class BookingIT extends AbstractIntegrationTest {
 
     private Long aliceId() {
         return appUserRepository.findByUsername("alice").orElseThrow().getId();
+    }
+
+    private Long bobId() {
+        return appUserRepository.findByUsername("bob").orElseThrow().getId();
     }
 
     private List<Long> showSeatIds() {
@@ -73,17 +79,51 @@ class BookingIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void bookingSeatWithoutAValidHold_isConflict() {
+    void bookingSeatNotCoveredByHold_isConflict() {
         Long alice = aliceId();
-        Long availableSeat = showSeatIds().get(2); // never held
+        HoldResponse hold = holdService.createHold(alice, new HoldRequest(1L, List.of(showSeatIds().get(2))));
+        Long otherSeat = showSeatIds().get(3); // not part of the hold
+
         assertThatThrownBy(() ->
-                bookingService.book(alice, "k3", new BookingRequest(999L, List.of(availableSeat))))
+                bookingService.book(alice, "k3", new BookingRequest(hold.holdId(), List.of(otherSeat))))
                 .isInstanceOf(ConflictException.class);
     }
 
     @Test
+    void cannotBookAnotherUsersHold_idor() {
+        Long alice = aliceId();
+        Long bob = bobId();
+        Long seat = showSeatIds().get(4);
+        HoldResponse aliceHold = holdService.createHold(alice, new HoldRequest(1L, List.of(seat)));
+
+        assertThatThrownBy(() ->
+                bookingService.book(bob, "idor-key", new BookingRequest(aliceHold.holdId(), List.of(seat))))
+                .isInstanceOf(ForbiddenException.class);
+
+        // Alice's seat must remain held, not booked by Bob.
+        assertThat(showSeatRepository.findById(seat).orElseThrow().getStatus()).isEqualTo(SeatStatus.HELD);
+    }
+
+    @Test
+    void idempotencyKey_isScopedPerUser() {
+        Long alice = aliceId();
+        Long bob = bobId();
+        Long seatA = showSeatIds().get(5);
+        HoldResponse aliceHold = holdService.createHold(alice, new HoldRequest(1L, List.of(seatA)));
+        bookingService.book(alice, "shared-key", new BookingRequest(aliceHold.holdId(), List.of(seatA)));
+
+        Long seatB = showSeatIds().get(6);
+        HoldResponse bobHold = holdService.createHold(bob, new HoldRequest(1L, List.of(seatB)));
+
+        // Bob reuses Alice's key: he must NOT receive Alice's booking; the global-unique key collides.
+        assertThatThrownBy(() ->
+                bookingService.book(bob, "shared-key", new BookingRequest(bobHold.holdId(), List.of(seatB))))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void bookEndpoint_requiresAuth() throws Exception {
-        String body = "{\"holdId\":1,\"showSeatIds\":[" + showSeatIds().get(3) + "]}";
+        String body = "{\"holdId\":1,\"showSeatIds\":[" + showSeatIds().get(7) + "]}";
         mvc.perform(post("/bookings").contentType("application/json").content(body))
                 .andExpect(status().isUnauthorized());
     }
