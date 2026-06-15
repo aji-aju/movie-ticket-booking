@@ -199,6 +199,9 @@ notifications, and the test suite incl. the concurrency proof.
 
 ## AI-assisted development
 
-This was built with Claude Code. See [`docs/ai/`](docs/ai/): the execution
-[`PLAN.md`](docs/ai/PLAN.md), the running [`prompts.md`](docs/ai/prompts.md) log, and a
-[`AI-WORKFLOW.md`](docs/ai/AI-WORKFLOW.md) summary of how the AI was directed and reviewed.
+This was built with Claude Code. See [`docs/ai/`](docs/ai/):
+- [`PLAN.md`](docs/ai/PLAN.md) — the execution plan agreed before coding.
+- [`prompts.md`](docs/ai/prompts.md) — running log of the intent-shaping prompts + the decision behind each.
+- [`AI-WORKFLOW.md`](docs/ai/AI-WORKFLOW.md) — how the AI was directed and reviewed.
+- [`SKILLS.md`](docs/ai/SKILLS.md) — the development skills/techniques used.
+- [`raw/development-prompts.md`](docs/ai/raw/development-prompts.md) — the raw, verbatim prompt history (curated to the take-home and PII-redacted).
