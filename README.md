@@ -46,7 +46,7 @@ same seat → exactly one succeeds.
 ## Tech stack
 
 - **Java 21** (builds/runs on JDK 24), **Spring Boot 3.4.1** — Web, Data JPA, Validation, Security
-- **PostgreSQL 16**, schema via **Flyway** migrations (`V1`–`V7`)
+- **PostgreSQL 16**, schema via **Flyway** migrations (`V1`–`V8`)
 - **Gradle** (wrapper 8.14), **springdoc-openapi** (Swagger UI)
 - **Testcontainers** + JUnit 5 for integration & concurrency tests
 
@@ -161,7 +161,7 @@ new class, no edits to the booking flow.
 ./gradlew test     # spins up Postgres via Testcontainers automatically
 ```
 
-**43 tests** across unit (Strategy impls) and Testcontainers integration (real Postgres + full servlet
+**42 tests** across unit (Strategy impls) and Testcontainers integration (real Postgres + full servlet
 stack). Highlights:
 
 - **The concurrency proof** (`BookingConcurrencyIT`): N threads book the *same* seat → asserts **exactly
